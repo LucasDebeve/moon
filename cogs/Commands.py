@@ -1,3 +1,4 @@
+import os
 from datetime import time, datetime
 
 import aiosqlite
@@ -5,15 +6,16 @@ import discord
 from discord.ext import commands, tasks
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from dotenv import load_dotenv
 
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
-import asyncio
 
 from bot import Bot
 
+GUILD_ID = os.getenv("GUILD_ID")
 
 async def check_website(url: str) -> tuple[int, webdriver]:
     """
@@ -121,9 +123,9 @@ class Commands(commands.Cog):
 
     @tasks.loop(seconds=20, reconnect=True)
     async def check_onepiece(self):
-        # TODO: Get guild_id from the bot
-        guild_id = "716301779096043552"
-
+        # TODO: Get guild_id from the bot.env
+        guild_id = GUILD_ID
+        at_least_one = False
         # Get all followed manga
         followed_mangas = await self.getAllFollowedManga(guild_id)
         print(f"Followed mangas: {followed_mangas}")
@@ -136,6 +138,7 @@ class Commands(commands.Cog):
             print(f"Last chapter: {last_db_chapter}")
             code, driver = await check_website(url + "-" + str(last_db_chapter + 1))
             if code == 200:
+                at_least_one = True
                 title = driver.find_element(By.CSS_SELECTOR, "h1.entry-title[itemprop=name]").text
                 self.bot.log.debug(f"{title} is up")
                 print(f"{title} is up")
@@ -180,18 +183,20 @@ class Commands(commands.Cog):
                 embed.set_thumbnail(url=cover_url)
                 embed.set_image(url=driver.find_element(By.CSS_SELECTOR, "#readerarea img:first-child")
                                     .get_attribute("src"))
-
+                # Mention everyone in the channel
                 await self.set_last_chapter(1, int(chapter), type_of_chapter, int(pages))
                 await channel.send(embed=embed)
+                driver.quit()
             elif code == 404:
                 print(f"One Piece hasn't released a new chapter yet ({last_db_chapter + 1})")
                 self.bot.log.debug(f"One Piece hasn't released a new chapter yet ({last_db_chapter + 1})")
-
-            try:
-                driver.quit()
-            except Exception as e:
-                print(f"Error closing the driver: {e}")
-                self.bot.log.error(f"Error closing the driver: {e}")
+            else:
+                print(f"Error while checking One Piece ({last_db_chapter + 1})")
+                self.bot.log.error(f"Error while checking One Piece ({last_db_chapter + 1})")
+                if driver:
+                    driver.quit()
+        if at_least_one:
+            await channel.send(f"@everyone")
 
     @check_onepiece.before_loop
     async def before_check_website(self):

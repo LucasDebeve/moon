@@ -17,6 +17,7 @@ from bot import Bot
 
 GUILD_ID = os.getenv("GUILD_ID")
 
+
 async def check_website(url: str) -> tuple[int, webdriver]:
     """
     Get content and status code from a website after javascript execution
@@ -113,15 +114,15 @@ class Commands(commands.Cog):
 
     async def getAllFollowedManga(self, guild_id: str):
         async with self.bot.database.cursor() as cursor:
-            await cursor.execute("SELECT manga_id FROM viewon WHERE server_id = ?", (guild_id, ))
+            await cursor.execute("SELECT manga_id FROM viewon WHERE server_id = ?", (guild_id,))
             return await cursor.fetchall()
 
     async def getChannel(self, guild_id: str):
         async with self.bot.database.cursor() as cursor:
-            await cursor.execute("SELECT channel_id FROM config WHERE server_id = ?", (guild_id, ))
+            await cursor.execute("SELECT channel_id FROM config WHERE server_id = ?", (guild_id,))
             return await cursor.fetchone()
 
-    @tasks.loop(seconds=20, reconnect=True)
+    @tasks.loop(minutes=20, reconnect=True)
     async def check_onepiece(self):
         # TODO: Get guild_id from the bot.env
         guild_id = GUILD_ID
@@ -182,7 +183,7 @@ class Commands(commands.Cog):
                 embed.set_footer(text=self.bot.footer)
                 embed.set_thumbnail(url=cover_url)
                 embed.set_image(url=driver.find_element(By.CSS_SELECTOR, "#readerarea img:first-child")
-                                    .get_attribute("src"))
+                                .get_attribute("src"))
                 # Mention everyone in the channel
                 await self.set_last_chapter(1, int(chapter), type_of_chapter, int(pages))
                 await channel.send(embed=embed)

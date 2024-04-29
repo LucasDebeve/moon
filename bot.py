@@ -1,15 +1,13 @@
 import asyncio
 
 import discord
+import selenium
 from discord.ext import commands
 import logging
-import requests
 from pathlib import Path
 import os
 from dotenv import load_dotenv
 import aiosqlite
-from selenium.webdriver.common.by import By
-from utils.views import MangaModal
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -30,9 +28,6 @@ class Bot(commands.Bot):
             activity=discord.Game(name="!help"),
             status=discord.Status.online,
         )
-        self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "Mozilla/5.0"})
-
         # var
         self.footer = "፨ MOON ፨ Made by __lucas_d"
         self.path = str(Path(__file__).parent)

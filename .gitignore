@@ -2,3 +2,4 @@ bot-env/
 logs/*
 .env
 .idea/
+*.db

@@ -7,9 +7,9 @@ import requests
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+import aiosqlite
 from selenium.webdriver.common.by import By
-
-from myCommands import MyCommands, check_website
+from utils.views import MangaModal
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -26,6 +26,7 @@ class Bot(commands.Bot):
                 403066350265827330,  # __lucas_d
             ],
             case_insensitive=True,
+            slash_commands=True,
             activity=discord.Game(name="!help"),
             status=discord.Status.online,
         )
@@ -35,6 +36,8 @@ class Bot(commands.Bot):
         # var
         self.footer = "፨ MOON ፨ Made by __lucas_d"
         self.path = str(Path(__file__).parent)
+        self.delay = DELAY
+        self.database = None
 
         # Logging
         logging.getLogger("discord").setLevel(logging.INFO)
@@ -56,66 +59,41 @@ class Bot(commands.Bot):
         self.log.info("Bot started\n---------------------------------")
 
     async def setup_hook(self) -> None:
-        await self.add_cog(MyCommands(self))
-        self.bg_task = self.loop.create_task(self.check_website())
+        """
+        Setup the bot
+        """
+        self.database = await aiosqlite.connect("database.db")
+        for file in os.listdir(self.path + "/cogs"):
+            if file.endswith(".py") and not file.startswith("_"):
+                try:
+                    await self.load_extension(f"cogs.{file[:-3]}")
+                    print(f"Loaded {file[:-3]} cog")
+                    self.log.info(f"Loaded {file[:-3]} cog")
+                except Exception as e:
+                    print(f"Error loading {file[:-3]} cog: {e}")
+                    self.log.error(f"Error loading {file[:-3]} cog: {e}")
         await self.tree.sync()
-
-    async def check_website(self) -> None:
-        await self.wait_until_ready()
-        while not self.is_closed():
-            await self.check_onepiece()
-            await asyncio.sleep(DELAY)
 
     async def on_ready(self):
         print(f"Logged in as {self.user}")
         self.log.debug(f"Logged in as {self.user}")
+        async with self.database.cursor() as cursor:
+            # Create the table if it doesn't exist
+            # Config
+            await cursor.execute(
+                "CREATE TABLE IF NOT EXISTS config (server_id INTEGER PRIMARY KEY, channel_id INTEGER, delay INTEGER)")
+            # Manga
+            await cursor.execute(
+                "CREATE TABLE IF NOT EXISTS manga (id INTEGER PRIMARY KEY AUTOINCREMENT, title VARCHAR(100), url VARCHAR(255), cover VARCHAR(255))")
+            # Chapter
+            await cursor.execute(
+                "CREATE TABLE IF NOT EXISTS chapter (manga_id INTEGER, chapter_num INTEGER, chapter_type CHAR(3), pages INTEGER, release_date DATETIME, PRIMARY KEY (manga_id, chapter_num), FOREIGN KEY (manga_id) REFERENCES manga(id))")
+            # ViewOn
+            await cursor.execute(
+                "CREATE TABLE IF NOT EXISTS viewon (server_id INTEGER, manga_id INTEGER, PRIMARY KEY (server_id, manga_id), FOREIGN KEY (manga_id) REFERENCES manga(id), FOREIGN KEY (server_id) REFERENCES config(server_id))")
+        await self.database.commit()
 
-    async def check_onepiece(self):
-        code, driver = await check_website("https://www.lelmanga.com/one-piece-1113")
-        embed = discord.Embed(
-            title="One Piece",
-            color=discord.Color.red(),
-            description="One Piece is down",
-        )
-        channel = self.get_channel(1233080956907159694)
-        if code == 200:
-            print("One Piece is up")
-            self.log.debug("One Piece is up")
-            embed = discord.Embed(
-                title=driver.find_element(By.CSS_SELECTOR, "h1.entry-title[itemprop=name]").text,
-                color=discord.Color.blue(),
-                description="One Piece is up",
-            )
-
-            embed.add_field(
-                name="Chapter",
-                value=driver.find_element(By.CSS_SELECTOR, "h1.entry-title[itemprop=name]").text.split(" ")[-1],
-            )
-            embed.add_field(
-                name="Pages",
-                value=driver.find_element(By.CSS_SELECTOR, "select#selected-paged option[selected]").text.split("/")[-1],
-            )
-            # Detect if (driver.find_element(By.CSS_SELECTOR, "select#selected-paged option[selected]")) contains "RAW"
-            if "RAW" in driver.find_element(By.CSS_SELECTOR, "select#chapter option[selected]").text:
-                embed.add_field(
-                    name="Mode",
-                    value="RAW",
-                )
-            else:
-                embed.add_field(
-                    name="Mode",
-                    value="Normal",
-                )
-            await channel.send(embed=embed)
-        elif code == 404:
-            print("One Piece is down")
-            self.log.debug("One Piece is down")
-
-        driver.quit()
-
-
-
-bot = Bot()
 
 if __name__ == "__main__":
-    bot.run(DISCORD_TOKEN)
+    main_bot = Bot()
+    main_bot.run(DISCORD_TOKEN)
